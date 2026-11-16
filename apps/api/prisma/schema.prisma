@@ -1,0 +1,86 @@
+generator client {
+    provider            = "prisma-client"
+    output              = "../src/generated/prisma"
+    moduleFormat        = "esm"
+    importFileExtension = "js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+model User {
+    id             String            @id @default(cuid())
+    name           String            @db.VarChar(40)
+    avatarUrl      String?           @db.VarChar(500)
+    isAdmin        Boolean           @default(false)
+    createdAt      DateTime          @default(now())
+    accounts       Account[]
+    packs          WordPack[]
+    participations GameParticipant[]
+}
+
+model Account {
+    id                String @id @default(cuid())
+    provider          String @db.VarChar(20)
+    providerAccountId String @db.VarChar(100)
+    userId            String
+    user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerAccountId])
+}
+
+enum Visibility {
+    OFFICIAL
+    PRIVATE
+    PUBLIC
+}
+
+model WordPack {
+    id         String     @id @default(cuid())
+    name       String     @db.VarChar(60)
+    language   String     @default("pl") @db.VarChar(5)
+    visibility Visibility @default(PRIVATE)
+    /// Public packs are listed only after moderation
+    approved   Boolean    @default(false)
+    ownerId    String?
+    owner      User?      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+    words      Word[]
+    createdAt  DateTime   @default(now())
+    updatedAt  DateTime   @updatedAt
+
+    @@index([visibility, approved])
+}
+
+model Word {
+    id       String   @id @default(cuid())
+    packId   String
+    pack     WordPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+    word     String   @db.VarChar(60)
+    hint     String   @db.VarChar(60)
+    category String   @db.VarChar(40)
+}
+
+model Game {
+    id           String            @id @default(cuid())
+    roomCode     String            @db.VarChar(10)
+    word         String            @db.VarChar(60)
+    category     String            @db.VarChar(40)
+    caught       Boolean?
+    playedAt     DateTime          @default(now())
+    participants GameParticipant[]
+}
+
+model GameParticipant {
+    id          String  @id @default(cuid())
+    gameId      String
+    game        Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+    userId      String?
+    user        User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+    name        String  @db.VarChar(40)
+    wasImpostor Boolean
+    won         Boolean
+    points      Int
+
+    @@index([userId])
+}

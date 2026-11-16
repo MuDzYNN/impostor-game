@@ -1,0 +1,98 @@
+x-hardening: &hardening
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+        options:
+            max-size: 10m
+            max-file: "3"
+
+x-database-url: &database-url postgresql://impostor:${POSTGRES_PASSWORD}@db:5432/impostor
+
+services:
+    web:
+        <<: *hardening
+        image: ${IMAGE:?set IMAGE in .env}-web:${TAG:-latest}
+        tmpfs:
+            - /tmp
+            - /app/apps/web/.next/cache:uid=1000,gid=1000
+        networks: [web]
+        healthcheck:
+            test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/robots.txt"]
+            interval: 30s
+            timeout: 5s
+            start_period: 20s
+
+    api:
+        <<: *hardening
+        image: ${IMAGE}-api:${TAG:-latest}
+        environment:
+            DATABASE_URL: *database-url
+            WEB_URL: ${WEB_URL:?set WEB_URL in .env}
+            API_URL: ${API_URL:?set API_URL in .env}
+            JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+            DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+            DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+            GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+            GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+        tmpfs: [/tmp]
+        networks: [web, db]
+        depends_on:
+            tools:
+                condition: service_completed_successfully
+        healthcheck:
+            test:
+                ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/auth/providers"]
+            interval: 30s
+            timeout: 5s
+            start_period: 20s
+
+    tunnel:
+        <<: *hardening
+        image: cloudflare/cloudflared:latest
+        command: tunnel --no-autoupdate run
+        environment:
+            TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+        networks: [web]
+        depends_on: [web, api]
+
+    # Runs migrations and the seed on every up
+    tools:
+        <<: *hardening
+        restart: "no"
+        image: ${IMAGE}-tools:${TAG:-latest}
+        environment:
+            DATABASE_URL: *database-url
+        tmpfs: [/tmp]
+        networks: [db]
+        depends_on:
+            db:
+                condition: service_healthy
+
+    db:
+        <<: *hardening
+        image: postgres:18-alpine
+        cap_drop: []
+        environment:
+            POSTGRES_USER: impostor
+            POSTGRES_DB: impostor
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+        tmpfs: [/tmp, /run/postgresql]
+        volumes:
+            - db:/var/lib/postgresql
+        networks: [db]
+        healthcheck:
+            test: ["CMD", "pg_isready", "-U", "impostor", "-d", "impostor"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+networks:
+    web:
+    # No internet access, only api and tools reach the db
+    db:
+        internal: true
+
+volumes:
+    db:
