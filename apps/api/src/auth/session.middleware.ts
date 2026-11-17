@@ -6,8 +6,15 @@ import { AuthService, SESSION_COOKIE } from "./auth.service.js";
 export class SessionMiddleware implements NestMiddleware {
 	constructor(private readonly auth: AuthService) {}
 
-	async use(req: Request, _res: Response, next: NextFunction) {
-		req.user = await this.auth.userFromToken(req.cookies?.[SESSION_COOKIE]);
+	async use(req: Request, res: Response, next: NextFunction) {
+		const token = req.cookies?.[SESSION_COOKIE];
+		req.user = await this.auth.userFromToken(token);
+		if (req.user && this.auth.needsRenewal(token))
+			res.cookie(
+				SESSION_COOKIE,
+				await this.auth.sign(req.user.id),
+				this.auth.cookieOptions(),
+			);
 		next();
 	}
 }

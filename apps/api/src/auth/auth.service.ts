@@ -3,13 +3,14 @@ import {
 	NotFoundException,
 	UnauthorizedException,
 } from "@nestjs/common";
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, decodeJwt, jwtVerify } from "jose";
 import type { User } from "../generated/prisma/client.js";
 import { PrismaService } from "../prisma.service.js";
 
 export const SESSION_COOKIE = "impostor_session";
 export const STATE_COOKIE = "impostor_oauth";
-const SESSION_TTL_DAYS = 30;
+const SESSION_TTL_DAYS = 7;
+const RENEW_AFTER_MS = 24 * 60 * 60 * 1000;
 
 interface Profile {
 	id: string;
@@ -172,6 +173,12 @@ export class AuthService {
 		} catch {
 			return null;
 		}
+	}
+
+	/** Valid token issued over a day ago */
+	needsRenewal(token: string): boolean {
+		const { iat = 0 } = decodeJwt(token);
+		return Date.now() - iat * 1000 > RENEW_AFTER_MS;
 	}
 
 	cookieOptions() {

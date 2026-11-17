@@ -23,7 +23,7 @@ type GameSocket = Socket<
 	ClientEvents,
 	ServerEvents,
 	Record<string, never>,
-	{ userId: string | null; code: string | null }
+	{ userId: string | null; code: string | null; ip: string }
 >;
 
 function readCookie(
@@ -35,6 +35,28 @@ function readCookie(
 		.find((c) => c.trim().startsWith(`${name}=`));
 	return match && decodeURIComponent(match.trim().slice(name.length + 1));
 }
+
+/** Fixed-window counter per key, false once the key goes over the limit */
+function rateLimit(limit: number, windowMs: number) {
+	const windows = new Map<string, { count: number; resetAt: number }>();
+	let sweepAt = 0;
+	return (key: string) => {
+		const now = Date.now();
+		if (now > sweepAt) {
+			for (const [k, w] of windows)
+				if (w.resetAt < now) windows.delete(k);
+			sweepAt = now + windowMs;
+		}
+		let w = windows.get(key);
+		if (!w || w.resetAt < now) {
+			w = { count: 0, resetAt: now + windowMs };
+			windows.set(key, w);
+		}
+		return ++w.count <= limit;
+	};
+}
+
+const SLOW_DOWN = "Za szybko, zwolnij trochę";
 
 function fail(err: unknown): { ok: false; error: string } {
 	if (err instanceof GameError) return { ok: false, error: err.message };
@@ -48,6 +70,9 @@ export class RoomsGateway
 {
 	@WebSocketServer()
 	server: Server<ClientEvents, ServerEvents>;
+
+	private readonly eventLimit = rateLimit(60, 10_000);
+	private readonly createLimit = rateLimit(10, 10 * 60_000);
 
 	constructor(
 		private readonly rooms: RoomsService,
@@ -73,6 +98,16 @@ export class RoomsGateway
 		);
 		client.data.userId = user?.id ?? null;
 		client.data.code = null;
+		client.data.ip = String(
+			client.handshake.headers["cf-connecting-ip"] ??
+				client.handshake.address,
+		);
+		// Over the limit the event is dropped and its ack gets an error
+		client.use((packet, next) => {
+			if (this.eventLimit(client.id)) return next();
+			const ack = packet.at(-1);
+			if (typeof ack === "function") ack({ ok: false, error: SLOW_DOWN });
+		});
 	}
 
 	handleDisconnect(client: GameSocket) {
@@ -121,6 +156,8 @@ export class RoomsGateway
 		@ConnectedSocket() client: GameSocket,
 		@MessageBody() data: { name: string; token: string },
 	): Ack<{ code: string }> {
+		if (!this.createLimit(client.data.ip))
+			return { ok: false, error: SLOW_DOWN };
 		try {
 			this.leaveCurrent(client);
 			const room = this.rooms.create(

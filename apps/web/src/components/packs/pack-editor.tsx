@@ -19,7 +19,7 @@ const VISIBILITY: { value: Visibility; label: string; hint: string }[] = [
 	{
 		value: "PUBLIC",
 		label: "Publiczna",
-		hint: "Po akceptacji moderatora widzą ją wszyscy.",
+		hint: "Po akceptacji moderatora widzą ją wszyscy. Każda zmiana wymaga ponownej akceptacji.",
 	},
 	{
 		value: "OFFICIAL",

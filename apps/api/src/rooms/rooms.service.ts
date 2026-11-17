@@ -4,6 +4,7 @@ import {
 	createGame,
 	GameError,
 	MAX_NAME_LENGTH,
+	MAX_PLAYERS,
 	reduce,
 	ROOM_CODE_ALPHABET,
 	ROOM_CODE_LENGTH,
@@ -38,6 +39,7 @@ export interface Room {
 	hostId: string;
 	members: Member[];
 	state: GameState;
+	createdAt: number;
 }
 
 type Listener = (room: Room) => void;
@@ -61,6 +63,10 @@ export class RoomsService implements OnModuleDestroy {
 	listen(onChange: Listener, onRemove: (socketId: string) => void) {
 		this.onChange = onChange;
 		this.onRemove = onRemove;
+	}
+
+	list(): Room[] {
+		return [...this.rooms.values()];
 	}
 
 	get(code: string): Room {
@@ -157,6 +163,7 @@ export class RoomsService implements OnModuleDestroy {
 			hostId: member.id,
 			members: [member],
 			state: createGame(),
+			createdAt: Date.now(),
 		};
 		member.name = this.cleanName(room, name);
 		room.state = reduce(room.state, {
@@ -187,6 +194,8 @@ export class RoomsService implements OnModuleDestroy {
 			this.onChange(room);
 			return room;
 		}
+		if (room.members.length >= MAX_PLAYERS)
+			throw new GameError("ROOM_FULL", "Pokój jest pełny");
 
 		const midRound =
 			room.state.phase !== "LOBBY" && room.state.phase !== "RESULT";

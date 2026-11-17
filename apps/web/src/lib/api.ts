@@ -1,4 +1,4 @@
-import type { WordEntry } from "@impostor/game";
+import type { Phase, WordEntry } from "@impostor/game";
 
 export const API_URL =
 	process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -47,6 +47,61 @@ export interface Stats {
 		won: boolean;
 		points: number;
 	}[];
+}
+
+export interface AdminStats {
+	games: number;
+	gamesDay: number;
+	gamesWeek: number;
+	caughtRate: number | null;
+	users: number;
+	usersWeek: number;
+	activeRooms: number;
+	onlinePlayers: number;
+	perDay: { day: string; games: number }[];
+	categories: { category: string; games: number }[];
+}
+
+export interface AdminRoom {
+	code: string;
+	phase: Phase;
+	roundNo: number;
+	createdAt: string;
+	hostName: string | null;
+	members: {
+		name: string;
+		connected: boolean;
+		spectator: boolean;
+		loggedIn: boolean;
+	}[];
+}
+
+export interface AdminGame {
+	id: string;
+	roomCode: string;
+	word: string;
+	category: string;
+	caught: boolean | null;
+	playedAt: string;
+	players: number;
+}
+
+export interface AdminGameDetail extends Omit<AdminGame, "players"> {
+	participants: {
+		id: string;
+		name: string;
+		wasImpostor: boolean;
+		won: boolean;
+		points: number;
+		user: { id: string; name: string } | null;
+	}[];
+}
+
+export interface AdminUser extends Me {
+	createdAt: string;
+	providers: string[];
+	games: number;
+	packs: number;
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {

@@ -45,6 +45,16 @@ jobs:
 
             - uses: docker/build-push-action@v6
               with:
+                  target: backup
+                  push: true
+                  tags: |
+                      ${{ steps.image.outputs.image }}-backup:${{ github.sha }}
+                      ${{ steps.image.outputs.image }}-backup:latest
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            - uses: docker/build-push-action@v6
+              with:
                   target: api
                   push: true
                   build-args: ${{ env.BUILD_ARGS }}

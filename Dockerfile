@@ -23,12 +23,20 @@ ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter api build && pnpm --filter web build
 
+FROM postgres:18-alpine AS backup
+RUN apk add --no-cache age rclone && install -d -o postgres /backups
+COPY --chmod=755 scripts/backup.sh /usr/local/bin/backup.sh
+USER postgres
+ENV HOME=/tmp
+CMD ["backup.sh"]
+
+# Production deps of api and @impostor/game only
 FROM base AS api-deps
-COPY --from=deps /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=deps /app/apps apps
-COPY --from=deps /app/packages packages
-RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules \
-	&& pnpm install --frozen-lockfile --prod --ignore-scripts --filter api...
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/game/package.json packages/game/
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts --filter api...
 
 FROM node:24-alpine AS api
 RUN apk add --no-cache libc6-compat

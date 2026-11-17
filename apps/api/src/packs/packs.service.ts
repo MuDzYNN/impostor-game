@@ -149,7 +149,7 @@ export class PacksService {
 	}
 
 	async update(id: string, user: User, input: PackInput) {
-		const pack = await this.editable(id, user);
+		await this.editable(id, user);
 		if (input.visibility === "OFFICIAL" && !user.isAdmin)
 			throw new ForbiddenException(
 				"Tylko administrator tworzy oficjalne paczki",
@@ -162,9 +162,7 @@ export class PacksService {
 					name: input.name,
 					language: input.language,
 					visibility: input.visibility,
-					approved:
-						user.isAdmin ||
-						(pack.approved && pack.visibility === input.visibility),
+					approved: user.isAdmin,
 					words: { create: input.words },
 				},
 			}),
@@ -179,12 +177,13 @@ export class PacksService {
 	}
 
 	async moderate(id: string, approve: boolean) {
-		await this.prisma.wordPack.update({
+		const { count } = await this.prisma.wordPack.updateMany({
 			where: { id },
 			data: approve
 				? { approved: true }
 				: { approved: false, visibility: "PRIVATE" },
 		});
+		if (!count) throw new NotFoundException("Nie ma takiej paczki");
 		return { ok: true };
 	}
 }

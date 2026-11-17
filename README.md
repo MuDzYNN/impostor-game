@@ -30,7 +30,11 @@ OAuth przez Discord i Google, bez własnych haseł. Przycisk danego dostawcy poj
 - `http://localhost:4000/auth/discord/callback`
 - `http://localhost:4000/auth/google/callback`
 
-Admina nadaje się ręcznie: `UPDATE User SET isAdmin = 1 WHERE id = '...';`
+Admina nadaje się skryptem, po pierwszym zalogowaniu (id użytkownika albo Discord/Google ID):
+
+```bash
+pnpm --filter api admin:add <id>
+```
 
 ## Testy
 
@@ -40,7 +44,7 @@ pnpm test   # reguły gry
 
 ## Deploy
 
-Push na `master` buduje w GitHub Actions trzy obrazy (`-web`, `-api`, `-tools`), wrzuca je do GHCR i wdraża po SSH na serwer ([`docker-compose.yml`](docker-compose.yml), zmienne w [`.env.example`](.env.example)). `tools` przy każdym starcie robi migracje i seed oficjalnej paczki. Ruch wchodzi przez Cloudflare Tunnel.
+Push na `master` buduje w GitHub Actions cztery obrazy (`-web`, `-api`, `-tools`, `-backup`), wrzuca je do GHCR i wdraża po SSH na serwer ([`docker-compose.yml`](docker-compose.yml), zmienne w [`.env.example`](.env.example)). `tools` przy każdym starcie robi migracje i seed oficjalnej paczki. Ruch wchodzi przez Cloudflare Tunnel, backupy bazy idą codziennie o 02:00 UTC do R2, zaszyfrowane kluczem age.
 
 Public hostnames w tunelu:
 
@@ -62,7 +66,14 @@ Adresy zwrotne OAuth na produkcji:
 Admin na serwerze:
 
 ```bash
-docker compose exec db psql -U impostor -c "UPDATE \"User\" SET \"isAdmin\" = true WHERE id = '...';"
+docker compose run --rm tools pnpm admin:add <id>
+```
+
+Backup na żądanie i odtworzenie (klucz prywatny age tylko lokalnie):
+
+```bash
+docker compose exec backup backup.sh now
+age -d -i key.txt impostor-YYYYMMDD-HHMMSS.dump.age | docker compose exec -T db pg_restore -U impostor -d impostor --clean
 ```
 
 Pokoje online żyją w pamięci API, więc deploy przerywa trwające gry.

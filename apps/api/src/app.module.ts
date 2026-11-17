@@ -1,4 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { AdminPanelController } from "./admin/admin.controller.js";
+import { AdminService } from "./admin/admin.service.js";
 import { AuthController } from "./auth/auth.controller.js";
 import { AuthService } from "./auth/auth.service.js";
 import { SessionMiddleware } from "./auth/session.middleware.js";
@@ -12,11 +16,21 @@ import { RoomsService } from "./rooms/rooms.service.js";
 import { UsersController } from "./users/users.controller.js";
 
 @Module({
+	imports: [
+		ThrottlerModule.forRoot({
+			throttlers: [{ ttl: 60_000, limit: 120 }],
+			errorMessage: "Za dużo zapytań, zwolnij trochę",
+			// Behind the Cloudflare tunnel every request comes from cloudflared
+			getTracker: (req) => req.headers["cf-connecting-ip"] ?? req.ip,
+			skipIf: (ctx) => ctx.getType() !== "http",
+		}),
+	],
 	controllers: [
 		AuthController,
 		PacksController,
 		AdminController,
 		UsersController,
+		AdminPanelController,
 	],
 	providers: [
 		PrismaService,
@@ -25,6 +39,8 @@ import { UsersController } from "./users/users.controller.js";
 		HistoryService,
 		RoomsService,
 		RoomsGateway,
+		AdminService,
+		{ provide: APP_GUARD, useClass: ThrottlerGuard },
 	],
 })
 export class AppModule implements NestModule {

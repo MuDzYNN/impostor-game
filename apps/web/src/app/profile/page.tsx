@@ -5,19 +5,11 @@ import { MAX_NAME_LENGTH } from "@impostor/game";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Stat } from "@/components/stat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMe } from "@/hooks/use-me";
 import { api, type Stats } from "@/lib/api";
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-	return (
-		<div className="flex flex-col rounded-lg border p-3">
-			<span className="text-2xl font-black tabular-nums">{value}</span>
-			<span className="text-xs text-muted-foreground">{label}</span>
-		</div>
-	);
-}
 
 export default function ProfilePage() {
 	const { me, loading, refresh } = useMe();
